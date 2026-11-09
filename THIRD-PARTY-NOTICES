@@ -1,0 +1,19 @@
+FH6 Engine Toggle bundles or relies on the following third-party software.
+
+Bundled in this download
+------------------------
+Python 3.8 runtime         Python Software Foundation License   https://www.python.org/
+NumPy                      BSD 3-Clause License                 https://numpy.org/
+vgamepad                   MIT License                          https://github.com/yannbouteiller/vgamepad
+ViGEmClient (in vgamepad)  MIT License                          https://github.com/nefarius/ViGEmClient
+vgmstream                  VGMSTREAM license (see tools\vgmstream\COPYING)  https://github.com/vgmstream/vgmstream
+PyInstaller bootloader     GPL 2.0 with bootloader exception    https://pyinstaller.org/
+
+Installed separately by you
+---------------------------
+ViGEmBus driver            BSD 3-Clause License                 https://github.com/nefarius/ViGEmBus
+HidHide driver             MIT License                          https://github.com/nefarius/HidHide
+
+No files from Forza Horizon 6 are included. Forza Horizon is a trademark of
+Microsoft. This tool is not made, endorsed or supported by Microsoft or
+Playground Games.
