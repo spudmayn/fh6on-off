@@ -1,3 +1,10 @@
+1. Install Python 3.8 from https://www.python.org/downloads/release/python-3810/ and tick "Add python.exe to PATH".
+2. Open PowerShell in this folder and run:
+   py -3.8 -m pip install pyinstaller numpy vgamepad pywin32
+3. Build the zip:
+   powershell -ExecutionPolicy Bypass -File .\build_release.ps1 -Version 1.1.0
+The zip is written to `release\FH6EngineToggle-1.1.0.zip`.
+
 # FH6 Engine Toggle
 
 Turn your car's engine off and on in Forza Horizon 6 with one key (F10, or D-pad down on the controller).
