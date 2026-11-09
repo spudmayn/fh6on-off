@@ -1,0 +1,41 @@
+Description
+Press F10, or D-pad down, to turn the car engine off and on.
+
+Installation instructions
+1. Install ViGEmBus and HidHide, then restart Windows.
+2. Unzip this folder anywhere. It does not need to be in Program Files.
+3. In Steam, right-click Forza Horizon 6, open Properties, then Controller, and choose Disable Steam Input.
+4. In the game, open Settings, HUD and Gameplay. Set Data Out to On, the IP address to 127.0.0.1, and the port to 5300.
+5. Run FH6EngineToggle.exe, or just start the game. A watcher opens the tool whenever Forza Horizon 6 starts.
+
+The first time only, calibrate the Cars volume when the tool asks, then do the one-time Shifting setup. After that it finds both on its own.
+
+Windows SmartScreen may warn about the exe because it is not code-signed. Choose More info, then Run anyway.
+
+Main features
+Engine off
+- The car sound fades out with a soft click and shudder.
+- Accelerate is cut on the keyboard and on the controller right trigger.
+- While the car is still rolling, the brakes stay on at least 5% and you can brake harder.
+- Once the car is nearly stopped, the handbrake is held, so it cannot drive or reverse.
+- Steering and every other button keep working.
+
+Engine on
+- A key click plays, then that car's own startup sound.
+- The engine revs to 75% of its max revs, then drops straight back down. The brake and handbrake are held during the rev and released once the revs fall.
+- If you drive Automatic, the tool switches to Manual for the rev so the brake does not reverse the car, then switches back.
+
+Press F10, or D-pad down while driving, to toggle. Close the tool or quit the game to stop. Either way, the tool hands the controller back.
+
+Requirements
+- Windows 10 or 11, 64-bit
+- Forza Horizon 6 on Steam
+- ViGEmBus, for the startup rev, the minimum brake, and the parking hold
+- HidHide, to cut the controller triggers while the engine is off
+
+Without those drivers, the tool still mutes and unmutes the car sound, and it shows what is missing when it starts.
+
+No game files are included.
+
+Shout outs
+vgmstream, vgamepad, ViGEm, and PyInstaller.
