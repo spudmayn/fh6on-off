@@ -15,6 +15,9 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
 
 $app = "$work\dist\FH6EngineToggle"
 Copy-Item "release_files\*" $app
+if (Test-Path "tools\vgmstream") {
+    Copy-Item "tools\vgmstream" (Join-Path $app "tools\vgmstream") -Recurse -Force
+}
 & "$app\FH6EngineToggle.exe" --restore-controller | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "The built exe did not start" }
 
