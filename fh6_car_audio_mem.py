@@ -1,3 +1,4 @@
+
 #! python3.8
 """FH6 Engine Toggle: turn the Forza Horizon 6 engine off and on with a hotkey (F10).
 
@@ -19,6 +20,7 @@ Usage:
     FH6EngineToggle                      calibrate if needed, then the hotkey toggles
     FH6EngineToggle --recalibrate        ignore the saved calibration
     FH6EngineToggle --restore-controller give the controller back to games and exit
+    FH6EngineToggle --debug-report       write FH6-debug-report.txt and exit
 Close the window to stop; the engine and controller are put back first.
 """
 
@@ -64,6 +66,7 @@ VIGEMBUS_URL = "https://github.com/nefarius/ViGEmBus/releases"
 HIDHIDE_URL = "https://github.com/nefarius/HidHide/releases"
 WINDOW_TITLE = "forza horizon 6"
 STEAM_APP_ID = "2483190"
+VERSION = "1.2.1"
 GAME_DIR = None
 
 # Everything a player can change lives in settings.json; these are the defaults and
@@ -88,6 +91,7 @@ DEFAULT_SETTINGS = {
     "shutoff_volume": 0.15,
     "telemetry_port": 5300,
     "game_exe_names": ["forzahorizon6.exe"],
+    "enabled": True,
 }
 SETTINGS_HELP = {
     "hotkey": "Key that turns the engine off and on: F1-F12.",
@@ -113,6 +117,7 @@ SETTINGS_HELP = {
     "shutoff_volume": "Loudness of the shutoff sound, 0 to 1.",
     "telemetry_port": "Port set in the game's Data Out settings.",
     "game_exe_names": "Process names the game may run as.",
+    "enabled": "While false, the tool stays closed and your controller is left alone. FH6 Turn Off.bat and FH6 Turn On.bat switch this.",
 }
 
 KEY_CODES = {"Up": 0x26, "Down": 0x28, "Left": 0x25, "Right": 0x27, "Space": 0x20,
@@ -303,6 +308,7 @@ SETTING_CHECKS = {
     "shutoff_volume": _number(0.0, 1.0),
     "telemetry_port": _port,
     "game_exe_names": _exe_names,
+    "enabled": _flag,
 }
 
 
@@ -2011,11 +2017,20 @@ def launch_mod():
     subprocess.Popen(command, creationflags=0x00000010, cwd=HERE)
 
 
+def app_enabled():
+    """False only when settings.json says the tool is turned off."""
+    try:
+        with open(SETTINGS_PATH, encoding="utf-8") as handle:
+            return json.load(handle).get("enabled", True) is not False
+    except (OSError, ValueError):
+        return True
+
+
 def watch_for_game():
     """Stay running in the background and open the toggle whenever the game starts."""
     launched = 0.0
     while True:
-        if find_game_pid() is not None and not mod_is_open() and time.time() - launched > 15:
+        if app_enabled() and find_game_pid() is not None and not mod_is_open() and time.time() - launched > 15:
             launch_mod()
             launched = time.time()
         time.sleep(2)
@@ -2040,13 +2055,145 @@ def install_watcher():
     return path
 
 
+def _tool_processes():
+    """Other copies of this program, by process id."""
+    out = subprocess.run(
+        ["powershell", "-NoProfile", "-Command",
+         "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*fh6_car_audio_mem*' -or $_.CommandLine -like '*FH6EngineToggle*' } | Select-Object -ExpandProperty ProcessId"],
+        capture_output=True, text=True,
+    ).stdout
+    return [int(line) for line in out.split() if line.isdigit() and int(line) != os.getpid()]
+
+
+def _stop_process(pid):
+    kernel32.TerminateProcess.argtypes = (wt.HANDLE, wt.UINT)
+    kernel32.TerminateProcess.restype = wt.BOOL
+    handle = kernel32.OpenProcess(0x0001, False, pid)
+    if not handle:
+        return
+    kernel32.TerminateProcess(handle, 0)
+    kernel32.CloseHandle(handle)
+
+
+def turn_off():
+    """Stop the open tool and leave it stopped until Turn On."""
+    load_settings()
+    save_setting("enabled", False)
+    user32.FindWindowW.argtypes = (wt.LPCWSTR, wt.LPCWSTR)
+    user32.FindWindowW.restype = wt.HWND
+    user32.PostMessageW.argtypes = (wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+    window = user32.FindWindowW(None, "FH6 Engine Toggle")
+    if window:
+        user32.PostMessageW(window, 0x0010, 0, 0)
+        for _ in range(20):
+            if not mod_is_open():
+                break
+            time.sleep(0.2)
+    if os.path.exists(HIDHIDE_CLI):
+        unroute_controller()
+    for pid in _tool_processes():
+        _stop_process(pid)
+    print("Turned off. Your controller is yours again.")
+    print("Double-click FH6 Turn On.bat when you want it back.")
+
+
+def turn_on():
+    """Let the tool open with the game again, and open it now if the game is running."""
+    load_settings()
+    save_setting("enabled", True)
+    if not _tool_processes():
+        if FROZEN:
+            command = [sys.executable, "--watch"]
+        else:
+            command = ["py", "-3.8", os.path.abspath(__file__), "--watch"]
+        subprocess.Popen(command, creationflags=0x08000000, cwd=HERE)
+    print("Turned on. It opens when Forza Horizon 6 is running.")
+
+
+def write_debug_report():
+    """A text file of this PC's setup, for sending when something goes wrong.
+    No memory dump and no controller identifiers."""
+    load_settings()
+    lines = [
+        "FH6 Engine Toggle debug report",
+        "version: %s" % VERSION,
+        "packaged: %s" % FROZEN,
+        "windows: %s" % (sys.getwindowsversion(),),
+        "enabled: %s" % app_enabled(),
+        "settings: hotkey=%s button=%s start_game=%s rev=%s rev_multiple=%s "
+        "manual_for_rev=%s min_brake=%s park_hold=%s cut_controller=%s "
+        "telemetry_port=%s" % (
+            HOTKEY_NAME, TOGGLE_BUTTON_NAME, START_GAME, REV_WITH_PAD, FLARE_IDLE_MULTIPLE,
+            SWITCH_TO_MANUAL, OFF_BRAKE, PARK_HOLD, PASS_THROUGH, TELEMETRY_PORT,
+        ),
+        "vigem_running: %s" % service_running("ViGEmBus"),
+        "hidhide_installed: %s" % os.path.exists(HIDHIDE_CLI),
+        "hidhide_running: %s" % service_running("HidHide"),
+        "vgmstream: %s" % os.path.exists(VGMSTREAM),
+    ]
+    try:
+        with open(STARTUP_INDEX_PATH, encoding="utf-8") as handle:
+            lines.append("startup_index_cars: %d" % len(json.load(handle)))
+    except (OSError, ValueError):
+        lines.append("startup_index_cars: missing")
+    lines.append("volume_fingerprints: %s" % os.path.exists(FINGERPRINTS_PATH))
+    lines.append("shifting_fingerprints: %s" % os.path.exists(SHIFTING_FINGERPRINTS_PATH))
+    lines.append("launch_control_file: %s" % os.path.exists(LAUNCH_PATH))
+    pid = find_game_pid()
+    lines.append("game_running: %s" % (pid or "no"))
+    if pid:
+        try:
+            game = Game(pid)
+            folder = game_folder(game.handle)
+            lines.append("game_folder: %s" % folder)
+            global GAME_DIR
+            GAME_DIR = folder
+            lines.append("steam_input_disabled: %s" % steam_input_disabled())
+        except OSError as error:
+            lines.append("game_open_failed: %s" % error)
+    telemetry = start_telemetry()
+    if telemetry is None:
+        lines.append("data_out: port %s is in use or could not be opened" % TELEMETRY_PORT)
+    else:
+        lines.append("data_out: %s" % ("receiving" if wait_for_telemetry(telemetry, 2.0) else "no packets yet"))
+        if telemetry.fresh():
+            lines.append("data_out_rpm: idle=%s max=%s now=%s" % (
+                telemetry.idle_rpm, telemetry.max_rpm, telemetry.rpm()))
+    try:
+        with open(SESSION_PATH, encoding="utf-8") as handle:
+            session = json.load(handle)
+        lines.append("session: places=%s muted=%s pid=%s" % (
+            len(session.get("candidates") or []), session.get("muted"), session.get("pid")))
+    except (OSError, ValueError):
+        lines.append("session: none")
+    path = os.path.join(HERE, "FH6-debug-report.txt")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
+    print("Wrote %s" % path)
+    print("Send that file when you ask for a fix. It has no memory dump.")
+    return path
+
+
 def main():
     global GAME_DIR
     if "--watch" in sys.argv:
         watch_for_game()
         return 0
+    if "--off" in sys.argv:
+        turn_off()
+        return 0
+    if "--on" in sys.argv:
+        turn_on()
+        return 0
+    if "--debug-report" in sys.argv:
+        write_debug_report()
+        return 0
     kernel32.SetConsoleTitleW("FH6 Engine Toggle")
     load_settings()
+    if not app_enabled():
+        print("FH6 Engine Toggle is turned off.")
+        print("Double-click FH6 Turn On.bat to use it again.")
+        return 0
     if "--restore-controller" in sys.argv:
         if os.path.exists(HIDHIDE_CLI):
             unroute_controller()
@@ -2076,7 +2223,7 @@ def main():
     try:
         game = wait_for_game(telemetry, routed)
         if game is None:
-            return 1
+            return 0 if not app_enabled() else 1
         GAME_DIR = game_folder(game.handle)
         session = open_session(game, pad is not None)
         if session is None:
@@ -2090,28 +2237,44 @@ def main():
 
 
 def wait_for_game(telemetry, routed):
-    """The running game, starting it first if it is not running."""
+    """The running game, started first if it is not running. The Cars volume from last
+    time is only found once you are actually driving, so this waits for that."""
     pid = find_game_pid()
-    if pid is not None:
-        if routed and FORCE_RECONNECT:
-            print("Reconnecting your controller so the game lets go of it (approve the Windows prompt)...")
-            print("Controller reconnected." if reconnect_controllers(routed) else "The reconnect was cancelled or failed.")
-        return Game(pid)
-    if START_GAME:
-        print("Starting Forza Horizon 6 through Steam...")
-        os.startfile("steam://rungameid/" + STEAM_APP_ID)
-    print("Waiting for Forza Horizon 6 to start (close this window to cancel)...")
-    while pid is None:
-        time.sleep(1)
-        pid = find_game_pid()
+    if pid is None:
+        if START_GAME:
+            print("Starting Forza Horizon 6 through Steam...")
+            os.startfile("steam://rungameid/" + STEAM_APP_ID)
+        print("Waiting for Forza Horizon 6 to start (close this window to cancel)...")
+        while pid is None:
+            if not app_enabled():
+                print("Turned off.")
+                return None
+            time.sleep(1)
+            pid = find_game_pid()
+    elif routed and FORCE_RECONNECT:
+        print("Reconnecting your controller so the game lets go of it (approve the Windows prompt)...")
+        print("Controller reconnected." if reconnect_controllers(routed) else "The reconnect was cancelled or failed.")
     game = Game(pid)
-    print("Game started. Get into a car and drive: this carries on by itself once Data Out")
-    print("shows you driving, or press Enter here when you are in a car.")
-    while not (telemetry is not None and telemetry.fresh()):
-        if msvcrt.kbhit() and msvcrt.getwch() in "\r\n":
-            break
+    if telemetry is None:
+        print("Data Out is not available, so the Cars volume from last time cannot be found on its own.")
+        print("Press Enter when you are in a car and driving.")
+        while True:
+            if not app_enabled():
+                print("Turned off.")
+                return None
+            if msvcrt.kbhit() and msvcrt.getwch() in "\r\n":
+                return game
+            if not game.running():
+                print("The game closed before getting into a car.")
+                return None
+            time.sleep(0.2)
+    print("Waiting until you are driving. The Cars volume from last time is picked up then.")
+    while not telemetry.fresh():
+        if not app_enabled():
+            print("Turned off.")
+            return None
         if not game.running():
-            print("The game closed before getting into a car.")
+            print("The game closed before you started driving.")
             return None
         time.sleep(0.2)
     return game
@@ -2186,12 +2349,17 @@ def run_engine(engine, game, telemetry, pad, routed):
         print("handbrake.")
         if telemetry is None or not telemetry.fresh():
             print("  (This needs Data Out; it starts working once telemetry arrives.)")
-    print("The engine is currently %s. Close this window to stop." % engine.state)
+    print("The engine is currently %s." % engine.state)
+    print("Double-click FH6 Turn Off.bat to stop the tool. FH6 Turn On.bat brings it back.")
     user32.SetTimer(None, 0, 1000, None)
     msg = wt.MSG()
     while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
         if msg.message == WM_HOTKEY and game_focused():
             engine.toggle()
+        elif msg.message == WM_TIMER and not app_enabled():
+            print("Turned off. Giving your controller back.")
+            engine.restore_now()
+            return 0
         elif msg.message == WM_TIMER and not game.running():
             print("Forza Horizon 6 closed; giving your controller back.")
             return 0
