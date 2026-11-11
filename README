@@ -1,10 +1,3 @@
-1. Install Python 3.8 from https://www.python.org/downloads/release/python-3810/ and tick "Add python.exe to PATH".
-2. Open PowerShell in this folder and run:
-   py -3.8 -m pip install pyinstaller numpy vgamepad pywin32
-3. Build the zip:
-   powershell -ExecutionPolicy Bypass -File .\build_release.ps1 -Version 1.1.0
-The zip is written to `release\FH6EngineToggle-1.1.0.zip`.
-
 # FH6 Engine Toggle
 
 Turn your car's engine off and on in Forza Horizon 6 with one key (F10, or D-pad down on the controller).
@@ -94,6 +87,16 @@ To stop, close the tool's window or quit the game. Either way, the tool hands yo
 | `telemetry_port` | `5300` | Must match the game's Data Out port |
 
 **Custom sounds:** put a `shutoff.wav` next to the exe to replace the shutoff sound. The key-turn click is still played in front of it. The startup crank is taken from the game's own recording for that kind of car. A `sounds\car_<number>_startup.wav` replaces it for one car. The tool prints the car's number when you turn its engine off.
+
+## Turning the tool off
+
+Double-click **FH6 Turn Off.bat** to stop it and leave your controller alone. It will not open again when the game starts.
+
+Double-click **FH6 Turn On.bat** to bring it back. It opens again while Forza Horizon 6 is running.
+
+## Sending a bug report
+
+Double-click **FH6 Debug Report.bat** while the problem is happening, ideally with the game running and Data Out on. It writes `FH6-debug-report.txt` in the tool folder. Send that file. It lists the setup checks only. It does not copy game memory.
 
 ## Troubleshooting
 
